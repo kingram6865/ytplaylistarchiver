@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import mysql from 'mysql2'
 
-
 function setMySqlConfig() {
   return {
     host: process.env.MYSQLHOST,
@@ -26,7 +25,12 @@ export async function mysqlConnection(db) {
 }
 
 export async function executeMySQL(conn, sql, data = []) {
-  let SQL = mysql.format(sql, data);
+  let SQL
+  if (data.length > 0) {
+    SQL = mysql.format(sql, data);
+  } else {
+    SQL = sql
+  }
   try {
     const [rows, fields] = await conn.promise().query(SQL)
     return { success: true, rows, fields }
