@@ -1,11 +1,5 @@
 import { mysqlConnectionPool, mysqlConnection, executeMySQL } from "./connect.js";
 
-export async function insertData(db, sql, data) {
-  const conn = mysqlConnection(db);
-  const results = await executeMySQL(conn, sql, data)
-  return results;
-}
-
 export async function dbCheck(db) {
   const conn = await mysqlConnection(db);
   const results = await executeMySQL(conn, 'SHOW TABLES');
@@ -39,7 +33,20 @@ export async function videoExists(db, videoid) {
   }
 }
 
-export async function addPlaylist(db, data) {}
+export async function addPlaylist(db, data) {
+  const conn = await mysqlConnection(db);
+  const sql = "INSERT INTO youtube_playlists (channel_db_id, channel_id, playlist_id, playlist_title, playlist_description, status, notes) VALUES (?)"
+  try {
+    const result = await executeMySQL(conn, sql, [data]);
+    if (result.success) {
+      return { message: `Added playlist to youtube_playlists objid: ${result.rows.insertId}`};
+    } else {
+      return { message: result.error.message, sql: result.error.sql }
+    }
+  } finally {
+    conn.end()
+  }
+}
 
 export async function addChannel(db, data) {
   let resultsCheck = `Add new channel with id 
@@ -55,9 +62,12 @@ export async function addChannel(db, data) {
   let sql = `INSERT INTO youtube_channel_owners 
   (owner_name, channel_link, channel_id, description, custom_url, joined, views, thumbnail_link) 
   VALUES (?,?,?,?,?,?,?,?)`;
-  const results = await executeMySQL(conn, sql, data);
-  conn.end();
-  return results;
+  try {
+    const results = await executeMySQL(conn, sql, data);
+    return results;
+  } finally {
+    conn.end();
+  }
 }
 
 export async function addVideo(db, data) {
@@ -71,11 +81,16 @@ export async function addVideo(db, data) {
 }
 
 export async function addVideoBatch(db, data) {
-  let results = {db, data}
-  // let sql = `INSERT INTO youtube_downloads 
-  // (channel_owner_id, url, play_length, caption, description, sequence, upload_date, thumbnail, status) 
-  // VALUES (${channelid},?,?,?,?,?,?,?,1)`;
-  // const conn = await mysqlConnectionPool(db);
-  // const results = await executeMySQL(conn, sql, data);
-  return results;
+  // let results = {db, data}
+  const conn = await mysqlConnectionPool(db);
+  let sql = `INSERT INTO youtube_downloads 
+  (channel_owner_id, url, play_length, caption, description, sequence, upload_date, thumbnail, status) 
+  VALUES ?`;
+
+  try {
+    const result = await executeMySQL(conn, sql, [data]);
+    return result;
+  } finally {
+    conn.end();
+  }  
 }
