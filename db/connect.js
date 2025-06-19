@@ -12,7 +12,7 @@ function setMySqlConfig() {
 
 export function mysqlConnectionPool(db) {
   let config = setMySqlConfig()
-  config = { ...config, db }
+  config = { ...config, database: db }
   const connection = mysql.createPool(config);
   return connection;
 }
