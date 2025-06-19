@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import axios from 'axios';
 import * as color from './utilities/consoleColorsES6.js'
-import { dbCheck, channelExists, addChannel, addVideo } from './db/dblib.js';
+import { channelExists, addChannel, addVideo, addVideoBatch, addPlaylist } from './db/dblib.js';
+import { formatDuration } from './utilities/tools.js';
 
 
 const playlistUrl = process.env.PLAYLISTITEMS;
@@ -103,10 +104,6 @@ async function retrievePlaylistitems(playlistid) {
   };
 }
 
-async function populateDatabase(dbname, data) {
-  let sql = "INSERT INTO youtube_downloads (channel_owner_id, play_length, sequence, title, description, status, url)"
-}
-
 async function getVideoDetailsBatch(videoIds, batchSize = 50) {
   const batches = []; // Holds a batch of 50 videoid's
 
@@ -169,7 +166,7 @@ async function main(id) {
   let addChannelResponse, videoChannelId;
   const list = await retrievePlaylistitems(id);
   // console.log(list.channelInfo, list.playlistInfo)
-  console.log(list.playlistItems.length)
+  // console.log(list.playlistItems.length)
   let channelStatus = await channelExists('test', list.playlistInfo.channelId)
   if (!channelStatus) {
     let newChannelData = [
@@ -184,10 +181,11 @@ async function main(id) {
     ]
 
     addChannelResponse = await addChannel('test', newChannelData);
-
+    
     if (addChannelResponse) {
       let message = `${color.brightGreen}Channel Id${color.Reset} ${color.brightCyan}${list.channelInfo.channelId}${color.Reset} ${(!channelStatus) ? `${color.brightGreen}is not archived in the database. Added with objid${color.Reset} ${color.brightCyan}${addChannelResponse.rows.insertId}${color.Reset}` : `${color.brightRed}error${color.Reset}`}`
       console.log(message);
+      videoChannelId = addChannelResponse.rows.insertId
     } else {
       console.log(addChannelResponse);
     }
@@ -197,25 +195,43 @@ async function main(id) {
   }
   // newChannelResults = await addVideo('test', )
   // console.log(list.playlistItems[0])
-  let batch = list.playlistItems.map(item => {
+  // channel_id, playlist_uri, playlist_description, status, notes
+  const playlistData = [
+    videoChannelId,
+    list.playlistInfo.channelId,
+    id,
+    list.playlistInfo.title,
+    list.playlistInfo.description,
+    "archived",
+    "No notes provided"
+  ]
+
+  const playlistStatus = await addPlaylist('test', playlistData);
+  console.log(playlistStatus.message)
+
+  let itemsBatch = list.playlistItems.map(item => {
     let newVideoData = [
       videoChannelId,
       "https://www.youtube.com/watch?v=" + item.videoid,
-      item.duration,
+      formatDuration(item.duration),
       item.title,
       item.description,
       item.position,
       item.publishedAt,
-      JSON.stringify(item.thumbnails)
+      JSON.stringify(item.thumbnails),
+      1
     ]
     // url, play_length, caption, description, sequence, upload_date, thumbnail
     return newVideoData;
   });
 
-  // console.log(batch.length)
-  batch.sort((a, b) => (a[5] > b[5]) ? 1 : (a[5] < b[5]) ? -1 : 0)
-  batch.forEach((array, i) => console.log(`[${i}] ${array[0]} ${array[5]}`))
-  // console.log(batch);
+  itemsBatch.sort((a, b) => (a[5] > b[5]) ? 1 : (a[5] < b[5]) ? -1 : 0)
+  // itemsBatch.forEach((array, i) => console.log(`[${i}] ${array[0]} ${array[5]} ${array[3]}`))
+  // console.log(Object.keys(list), "\n", list.playlistInfo)
+  const BATCH_SIZE = 1000;
+  for (let i = 0; i < itemsBatch.length; i += BATCH_SIZE) {
+    await addVideoBatch('test', itemsBatch.slice(i, i + BATCH_SIZE));
+  }  
 }
 
 main(process.argv[2]);
