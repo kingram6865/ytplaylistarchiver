@@ -1,4 +1,4 @@
-import { mysqlConnection, executeMySQL } from "./connect.js";
+import { mysqlConnectionPool, mysqlConnection, executeMySQL } from "./connect.js";
 
 export async function insertData(db, sql, data) {
   const conn = mysqlConnection(db);
@@ -13,6 +13,8 @@ export async function dbCheck(db) {
   return results;
 }
 
+export async function playlistExists(db, channel) {}
+
 export async function channelExists(db, channel) {
   const conn = await mysqlConnection(db);
   let sql = `SELECT * FROM youtube_channel_owners where channel_id = '${channel}'`
@@ -25,21 +27,55 @@ export async function channelExists(db, channel) {
   }
 }
 
+export async function videoExists(db, videoid) {
+  const conn = await mysqlConnection(db);
+  let sql = `SELECT 1 FROM youtube_downloads where url LIKE '${videoid}'`
+  const results = await executeMySQL(conn, sql);
+  conn.end();
+  if (results.rows.length === 0) {
+    return false
+  } else {
+    return true
+  }
+}
+
+export async function addPlaylist(db, data) {}
+
 export async function addChannel(db, data) {
-  let results = `Add new channel with id ${data}`;
-  // const conn = await mysqlConnection(db);
-  // let sql = `INSERT INTO youtube_channel_owners 
-  // (owner_name, channel_link, channel_id, description, custom_url, joined, views, thumbnail_link) 
-  // VALUES (?,?,?,?,?,?,?,?,?,?)`
-  // const results = await executeMySQL(conn, sql, data);
-  // conn.end();
+  let resultsCheck = `Add new channel with id 
+  owner_name: ${data[0]}
+  channel_link: ${data[1]}
+  channel_id: ${data[2]}
+  description: ${data[3]}
+  custom_url: ${data[4]}
+  joined: ${data[5]}
+  views: ${data[6]}
+  thumbnail_link: ${JSON.parse(data[7]).maxres.url}`;
+  const conn = await mysqlConnection(db);
+  let sql = `INSERT INTO youtube_channel_owners 
+  (owner_name, channel_link, channel_id, description, custom_url, joined, views, thumbnail_link) 
+  VALUES (?,?,?,?,?,?,?,?)`;
+  const results = await executeMySQL(conn, sql, data);
+  conn.end();
   return results;
 }
 
 export async function addVideo(db, data) {
-  let sql = ``
-  const conn = await mysqlConnection(db);
-  const results = await executeMySQL(conn, sql, data);
-  conn.end();
+  let results = {db, data}
+  // let sql = `INSERT INTO youtube_downloads 
+  // (channel_owner_id, url, play_length, caption, description, sequence, upload_date, thumbnail, status) 
+  // VALUES (${channelid},?,?,?,?,?,?,?,1)`
+  // const conn = await mysqlConnectionPool(db);
+  // const results = await executeMySQL(conn, sql, data);
+  return results;
+}
+
+export async function addVideoBatch(db, data) {
+  let results = {db, data}
+  // let sql = `INSERT INTO youtube_downloads 
+  // (channel_owner_id, url, play_length, caption, description, sequence, upload_date, thumbnail, status) 
+  // VALUES (${channelid},?,?,?,?,?,?,?,1)`;
+  // const conn = await mysqlConnectionPool(db);
+  // const results = await executeMySQL(conn, sql, data);
   return results;
 }
