@@ -8,21 +8,18 @@ const playlistUrl = process.env.PLAYLISTITEMS;
 const playlistInfo = process.env.PLAYLISTDATA;
 const channelAPIInfo = process.env.CHANNELDATA;
 const apiVideoInfo = process.env.VIDEODATA;
-const playlistItems = [];
+// const playlistItems = [];
+let playlistItems
 let playlistAttribs, channelInfo
-let data
+
 
 async function retrievePlaylistitems(playlistid) {
   try {
     let response1 = await axios.get(`${playlistInfo}&id=${playlistid}`)
     let response = await axios.get(`${playlistUrl}&playlistId=${playlistid}`);
     let response3 = await axios.get(`${channelAPIInfo}&id=${response1.data.items[0].snippet.channelId}`)
-    
 
     playlistAttribs = response1.data.items[0]
-    // console.log(response1.data.items[0].snippet)
-    // console.log(response.data.pageInfo.totalResults);
-    // console.log(response3.data.items[0])
 
     channelInfo = {
       channelId: (response1.data.items[0].snippet.channelId === response3.data.items[0].id) ? response1.data.items[0].snippet.channelId : "channel id error",
@@ -34,39 +31,59 @@ async function retrievePlaylistitems(playlistid) {
       viewCount: response3.data.items[0].statistics.viewCount
     }
 
-    response.data.items.forEach(async x => {
-      let apiInfo = await axios.get(`${apiVideoInfo}&id=${x.contentDetails.videoId}`)
-      data = {
+    const allItems = [...response.data.items];
+    while (response.data.nextPageToken) {
+      const url = `${playlistUrl}&playlistId=${playlistid}&pageToken=${response.data.nextPageToken}`;
+      response = await axios.get(url);
+      allItems.push(...response.data.items);
+    }
+
+    // response.data.items.forEach(x => {
+    //   data = {
+    //     position: x.snippet.position + 1,
+    //     videoid: x.contentDetails.videoId,
+    //     publishedAt: x.snippet.publishedAt,
+    //     title: x.snippet.title,
+    //     description: x.snippet.description,
+    //     thumbnails: x.snippet.thumbnails,
+    //     duration: apiInfo.data.items[0].contentDetails.duration
+    //   }
+
+    //   playlistItems.push(data)
+    // });
+
+    // while (response.data.nextPageToken) {
+    //   const url = `${playlistUrl}&playlistId=${playlistid}&pageToken=${response.data.nextPageToken}`
+    //   response = await axios.get(url);
+    //   response.data.items.forEach(x => {
+    //     data = {
+    //       position: x.snippet.position + 1,
+    //       videoid: x.contentDetails.videoId,
+    //       publishedAt: x.snippet.publishedAt,
+    //       title: x.snippet.title,
+    //       description: x.snippet.description,
+    //       thumbnails: x.snippet.thumbnails,
+    //       duration: apiInfo.data.items[0].contentDetails.duration
+    //     }
+
+    //     playlistItems.push(data)
+    //   });
+    // }
+
+    const videoDetails = await getVideoDetailsBatch(allItems.map(x => x.contentDetails.videoId));
+    playlistItems = allItems.map((x, index) => {
+      const apiInfo = videoDetails[index];
+      return {
         position: x.snippet.position + 1,
         videoid: x.contentDetails.videoId,
         publishedAt: x.snippet.publishedAt,
         title: x.snippet.title,
         description: x.snippet.description,
         thumbnails: x.snippet.thumbnails,
-        duration: apiInfo.data.items[0].contentDetails.duration
-      }
-      // console.log(data.position, data.title)
-      playlistItems.push(data)
+        duration: apiInfo.contentDetails.duration        
+      };
     });
 
-    while (response.data.nextPageToken) {
-      let url = `${playlistUrl}&playlistId=${playlistid}&pageToken=${response.data.nextPageToken}`
-      response = await axios.get(url);
-      response.data.items.forEach(async x => {
-        let apiInfo = await axios.get(`${apiVideoInfo}&id=${x.contentDetails.videoId}`)
-        data = {
-          position: x.snippet.position + 1,
-          videoid: x.contentDetails.videoId,
-          publishedAt: x.snippet.publishedAt,
-          title: x.snippet.title,
-          description: x.snippet.description,
-          thumbnails: x.snippet.thumbnails,
-          duration: apiInfo.data.items[0].contentDetails.duration
-        }
-        // console.log(data.position, data.title)
-        playlistItems.push(data)
-      });
-    }
   } catch(err) {
     console.log(err);
   }
@@ -88,6 +105,64 @@ async function retrievePlaylistitems(playlistid) {
 
 async function populateDatabase(dbname, data) {
   let sql = "INSERT INTO youtube_downloads (channel_owner_id, play_length, sequence, title, description, status, url)"
+}
+
+async function getVideoDetailsBatch(videoIds, batchSize = 50) {
+  const batches = []; // Holds a batch of 50 videoid's
+
+  // From the input list of videoid'd create 50-element slices and add to batches array.
+  for (let i = 0; i < videoIds.length; i += batchSize) {
+    batches.push(videoIds.slice(i, i + batchSize));
+  }
+
+  // Process the batches array
+  const results = await Promise.all(
+    batches.map(batch => {
+      const url = `${apiVideoInfo}&id=${batch.join(',')}`; // run an API request on a batch of videoid's (50 at a time)
+      return retryAPIRequest(url);
+    })
+  );
+
+  return results.flatMap(r => r.items);
+}
+
+class YouTubeAPIError extends Error {
+  constructor(message, statusCode, url) {
+    super(message);
+    this.name = 'YouTubeAPIError';
+    this.statusCode = statusCode;
+    this.url = url;
+  }
+}
+
+async function safeAPIRequest(url) {
+  try {
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    throw new YouTubeAPIError(
+      error.message,
+      error.response?.status,
+      url
+    );
+  }
+}
+
+async function retryAPIRequest(url, maxRetries = 3, delay = 1000) {
+  let lastError;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await safeAPIRequest(url);
+    } catch (error) {
+      lastError = error;
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+      }
+    }
+  }
+  
+  throw lastError;
 }
 
 async function main(id) {
