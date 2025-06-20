@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 import * as color from './utilities/consoleColorsES6.js'
-import { channelExists, addChannel, addVideo, addVideoBatch, addPlaylist } from './db/dblib.js';
+import { channelExists, addChannel, addVideoBatch, addPlaylist } from './db/dblib.js';
 import { formatDuration } from './utilities/tools.js';
 
 
@@ -9,7 +9,6 @@ const playlistUrl = process.env.PLAYLISTITEMS;
 const playlistInfo = process.env.PLAYLISTDATA;
 const channelAPIInfo = process.env.CHANNELDATA;
 const apiVideoInfo = process.env.VIDEODATA;
-// const playlistItems = [];
 let playlistItems
 let playlistAttribs, channelInfo
 
@@ -38,38 +37,6 @@ async function retrievePlaylistitems(playlistid) {
       response = await axios.get(url);
       allItems.push(...response.data.items);
     }
-
-    // response.data.items.forEach(x => {
-    //   data = {
-    //     position: x.snippet.position + 1,
-    //     videoid: x.contentDetails.videoId,
-    //     publishedAt: x.snippet.publishedAt,
-    //     title: x.snippet.title,
-    //     description: x.snippet.description,
-    //     thumbnails: x.snippet.thumbnails,
-    //     duration: apiInfo.data.items[0].contentDetails.duration
-    //   }
-
-    //   playlistItems.push(data)
-    // });
-
-    // while (response.data.nextPageToken) {
-    //   const url = `${playlistUrl}&playlistId=${playlistid}&pageToken=${response.data.nextPageToken}`
-    //   response = await axios.get(url);
-    //   response.data.items.forEach(x => {
-    //     data = {
-    //       position: x.snippet.position + 1,
-    //       videoid: x.contentDetails.videoId,
-    //       publishedAt: x.snippet.publishedAt,
-    //       title: x.snippet.title,
-    //       description: x.snippet.description,
-    //       thumbnails: x.snippet.thumbnails,
-    //       duration: apiInfo.data.items[0].contentDetails.duration
-    //     }
-
-    //     playlistItems.push(data)
-    //   });
-    // }
 
     const videoDetails = await getVideoDetailsBatch(allItems.map(x => x.contentDetails.videoId));
     playlistItems = allItems.map((x, index) => {
@@ -165,8 +132,6 @@ async function retryAPIRequest(url, maxRetries = 3, delay = 1000) {
 async function main(id) {
   let addChannelResponse, videoChannelId;
   const list = await retrievePlaylistitems(id);
-  // console.log(list.channelInfo, list.playlistInfo)
-  // console.log(list.playlistItems.length)
   let channelStatus = await channelExists('test', list.playlistInfo.channelId)
   if (!channelStatus) {
     let newChannelData = [
@@ -193,9 +158,7 @@ async function main(id) {
     videoChannelId = channelStatus.objid
     console.log(`${color.brightGreen}Channel${color.Reset} ${color.brightBlue}${channelStatus.owner_name}${color.Reset} ${color.brightGreen}has Database ID${color.Reset} ${color.brightBlue}${videoChannelId}${color.Reset}, ${color.brightGreen}Channel ID:${color.Reset} ${list.channelInfo.channelId} ${color.brightGreen}for Playlist${color.Reset} ${color.brightBlue}${id}${color.Reset} ${color.brightGreen}which has${color.Reset} ${color.brightYellow}${list.playlistItems.length}${color.Reset} ${color.brightGreen}items.${color.Reset}`);
   }
-  // newChannelResults = await addVideo('test', )
-  // console.log(list.playlistItems[0])
-  // channel_id, playlist_uri, playlist_description, status, notes
+
   const playlistData = [
     videoChannelId,
     list.playlistInfo.channelId,
@@ -221,13 +184,12 @@ async function main(id) {
       JSON.stringify(item.thumbnails),
       1
     ]
-    // url, play_length, caption, description, sequence, upload_date, thumbnail
+  
     return newVideoData;
   });
 
   itemsBatch.sort((a, b) => (a[5] > b[5]) ? 1 : (a[5] < b[5]) ? -1 : 0)
-  // itemsBatch.forEach((array, i) => console.log(`[${i}] ${array[0]} ${array[5]} ${array[3]}`))
-  // console.log(Object.keys(list), "\n", list.playlistInfo)
+    
   const BATCH_SIZE = 1000;
   for (let i = 0; i < itemsBatch.length; i += BATCH_SIZE) {
     await addVideoBatch('test', itemsBatch.slice(i, i + BATCH_SIZE));
